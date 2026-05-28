@@ -61,20 +61,18 @@ else:
         all_data = []
         for ticker in ticker_list:
             try:
-                # yf.Ticker().history()는 단일 종목의 데이터를 깨끗한 단일 인덱스 형태로 가져옵니다.
-                # 최신 yfinance의 버그를 예방하는 가장 확실한 방법입니다.
+                # yf.Ticker().history()를 사용하여 안전하게 데이터를 가져옵니다.
                 ticker_obj = yf.Ticker(ticker)
                 df_single = ticker_obj.history(start=start, end=end)
                 
                 if df_single.empty:
                     continue
                 
-                # 미국과 한국 주식은 타임존(Tz) 정보가 다릅니다.
-                # 병합할 때 시간대 충돌 오류를 방지하기 위해 타임존 정보만 제거(Naive 전환)해 줍니다.
+                # 미국과 한국 주식의 시간대(Timezone) 충돌 방지
                 if df_single.index.tz is not None:
                     df_single.index = df_single.index.tz_localize(None)
                 
-                # 배당과 액면분할이 자동 반영된 수정종가('Close') 컬럼만 가져옵니다.
+                # 수정종가('Close') 컬럼 추출
                 series = df_single['Close']
                 series.name = ticker
                 all_data.append(series)
@@ -83,7 +81,7 @@ else:
                 continue
         
         if all_data:
-            # 가져온 개별 주식 데이터를 날짜 기준으로 옆으로 합쳐 하나의 큰 표로 만듭니다.
+            # 개별 데이터들을 날짜 기준으로 결합
             return pd.concat(all_data, axis=1)
         else:
             return pd.DataFrame()
@@ -95,24 +93,23 @@ else:
         if df.empty:
             st.error("❌ 선택하신 기간에 해당하는 데이터가 존재하지 않습니다. 날짜를 다시 설정해 주세요.")
         else:
-            # 영어 티커 열 이름을 사용자가 알아보기 쉽게 한글 이름으로 변경
+            # 영어 티커 열 이름을 한글 이름으로 변경
             inv_stock_dict = {v: k for k, v in stock_dict.items()}
             df = df.rename(columns=inv_stock_dict)
 
-            # 한국과 미국의 휴장일 차이로 인해 발생하는 임시 빈칸(NaN)을 앞뒤 값으로 채워줍니다.
+            # 결측치 처리 (앞뒤 값으로 채움)
             df_clean = df.ffill().bfill()
 
-            # 누적 수익률 계산 공식: ((현재 가격 / 시작일 가격) - 1) * 100
+            # 누적 수익률 계산
             normalized_df = (df_clean / df_clean.iloc[0] - 1) * 100
 
-            # 탭(Tab) 구성으로 시각화 화면 정리
+            # 탭 구성
             tab1, tab2, tab3 = st.tabs(["📊 누적 수익률 비교", "📈 실제 주가 변동", "📋 요약 데이터"])
 
             with tab1:
                 st.subheader("🔍 누적 수익률 (%) 비교 차트")
                 st.markdown("**시작일의 가치를 0%**로 기준 잡고, 선택한 기간 동안 어떤 주식이 가장 높은 성과를 냈는지 직관적으로 비교합니다.")
                 
-                # 인터랙티브 선 그래프 그리기
                 fig_return = px.line(
                     normalized_df, 
                     labels={"value": "누적 수익률 (%)", "Date": "날짜"},
@@ -136,7 +133,7 @@ else:
             with tab3:
                 st.subheader("📌 기간 내 통계 요약 및 원본 데이터")
                 
-                # 각 주식별 성과 분석
+                # 통계 요약 데이터 프레임 구축
                 summary_list = []
                 for col in df_clean.columns:
                     start_val = df_clean[col].iloc[0]
